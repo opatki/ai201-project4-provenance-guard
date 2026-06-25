@@ -46,7 +46,7 @@ Appeals follow a separate path: `POST /appeal` validates the `content_id` agains
 
 ## Detection Signals
 
-### Signal A — Perplexity (weight: 0.35)
+### Signal A — Perplexity (weight: 0.45)
 
 **What it measures:** How statistically predictable the word choices are. Implemented as a Groq LLM judge: the model scores the text on a `[0.0, 1.0]` scale where `1.0` means the text matches the high-probability patterns typical of instruction-tuned LLM output.
 
@@ -56,7 +56,7 @@ Appeals follow a separate path: `POST /appeal` validates the `content_id` agains
 
 ---
 
-### Signal B — Burstiness (weight: 0.25)
+### Signal B — Burstiness (weight: 0.35)
 
 **What it measures:** The standard deviation of sentence lengths (in word-tokens) across the submission. Low standard deviation means uniform sentences; high standard deviation means the author mixes long complex sentences with short punchy ones.
 
@@ -66,7 +66,7 @@ Appeals follow a separate path: `POST /appeal` validates the `content_id` agains
 
 ---
 
-### Signal C — Vocabulary Diversity / MATTR (weight: 0.20)
+### Signal C — Vocabulary Diversity / MATTR (weight: 0.10)
 
 **What it measures:** Moving Average Type-Token Ratio — the average fraction of unique words in a sliding 50-token window. Low MATTR means repetitive vocabulary; high MATTR means rich lexical variety.
 
@@ -76,7 +76,7 @@ Appeals follow a separate path: `POST /appeal` validates the `content_id` agains
 
 ---
 
-### Signal D — N-Gram Marker Frequency (weight: 0.20)
+### Signal D — N-Gram Marker Frequency (weight: 0.10)
 
 **What it measures:** The density of LLM-characteristic words and phrases per 100 tokens. The marker lexicon includes single words (`delve`, `testament`, `furthermore`, `meticulously`, `underscore`, `nuanced`, `pivotal`, `robust`, `stakeholders`, `transformative`, `actionable`, `multifaceted`) and multi-word phrases (`it is important to note`, `it is worth noting`, `testament to`, `in today's`).
 
@@ -91,10 +91,10 @@ Appeals follow a separate path: `POST /appeal` validates the `content_id` agains
 The four signal scores are combined via a weighted average:
 
 ```
-confidence = 0.35 × perplexity
-           + 0.25 × burstiness
-           + 0.20 × vocabulary
-           + 0.20 × ngram
+confidence = 0.45 × perplexity
+           + 0.35 × burstiness
+           + 0.10 × vocabulary
+           + 0.10 × ngram
 ```
 
 The weights reflect confidence in each signal's reliability: perplexity receives the highest weight because it is semantically grounded (the LLM judge understands context), burstiness second because it is structurally independent of vocabulary, and vocabulary and n-gram share the remaining weight as strong corroborating signals that are noisier on short text.
