@@ -8,8 +8,13 @@ from flask import Flask, request, jsonify
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 
-from audit_log import write_log_entry, get_log
+from audit_log import get_entry, get_log, write_log_entry
+from labels import generate_label
+from signals.burstiness import compute_burstiness_score
+from signals.ngram import compute_ngram_score
 from signals.perplexity import compute_perplexity_score
+from signals.scoring import compute_confidence_score
+from signals.vocabulary import compute_vocabulary_score
 
 app = Flask(__name__)
 
@@ -33,6 +38,7 @@ def _score_to_attribution(score: float) -> str:
 
 
 @app.route("/submit", methods=["POST"])
+@limiter.limit("10 per minute")
 def submit():
     data = request.get_json(silent=True)
     if not data or "text" not in data or "creator_id" not in data:
@@ -43,23 +49,73 @@ def submit():
     content_id = str(uuid.uuid4())
 
     perplexity_score = compute_perplexity_score(text)
-    attribution = _score_to_attribution(perplexity_score)
+    burstiness_score = compute_burstiness_score(text)
+    vocabulary_score = compute_vocabulary_score(text)
+    ngram_score      = compute_ngram_score(text)
+    confidence_score = compute_confidence_score(
+        perplexity_score, burstiness_score, vocabulary_score, ngram_score
+    )
+    attribution = _score_to_attribution(confidence_score)
+    label       = generate_label(confidence_score)
 
     write_log_entry({
         "content_id": content_id,
         "creator_id": creator_id,
         "attribution": attribution,
-        "confidence": None,         # M4: computed from all signals
-        "llm_score": perplexity_score,
+        "confidence": confidence_score,
+        "signals": {
+            "perplexity": perplexity_score,
+            "burstiness": burstiness_score,
+            "vocabulary": vocabulary_score,
+            "ngram": ngram_score,
+        },
+        "label": label["classification"],
         "status": "classified",
     })
 
     return jsonify({
         "content_id": content_id,
-        "perplexity_score": perplexity_score,
+        "signals": {
+            "perplexity": perplexity_score,
+            "burstiness": burstiness_score,
+            "vocabulary": vocabulary_score,
+            "ngram": ngram_score,
+        },
+        "confidence_score": confidence_score,
         "attribution": attribution,
-        "confidence_score": None,   # M4
-        "label": None,              # M5
+        "label": label,
+    })
+
+
+@app.route("/appeal", methods=["POST"])
+def appeal():
+    data = request.get_json(silent=True)
+    if not data or "content_id" not in data or "creator_reasoning" not in data:
+        return jsonify({"error": "Missing required fields: content_id, creator_reasoning"}), 400
+
+    content_id         = data["content_id"]
+    creator_reasoning  = data["creator_reasoning"]
+    creator_id         = data.get("creator_id", "")
+
+    if not get_entry(content_id):
+        return jsonify({"error": "content_id not found"}), 404
+
+    appeal_id = str(uuid.uuid4())
+
+    write_log_entry({
+        "type": "appeal",
+        "appeal_id": appeal_id,
+        "content_id": content_id,
+        "creator_id": creator_id,
+        "appeal_reasoning": creator_reasoning,
+        "status": "under_review",
+    })
+
+    return jsonify({
+        "appeal_id": appeal_id,
+        "content_id": content_id,
+        "status": "under_review",
+        "message": "Appeal received. Your submission is now under review.",
     })
 
 
