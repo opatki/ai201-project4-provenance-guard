@@ -2,6 +2,8 @@
 
 An AI-authorship detection API for creative platforms. Submitted text is analyzed by four independent signals and returned with a transparency label, a confidence score, and an appeal pathway.
 
+[Demo Video](https://www.loom.com/share/f142fb21d1e74b2f8914848065914ccb)
+
 ---
 
 ## Architecture Overview
